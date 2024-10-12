@@ -1,16 +1,24 @@
 from flask import Flask, render_template, request, redirect, url_for
+import sqlite3
 import os
-import pandas as pd
 
 app = Flask(__name__)
 
-# Set a folder to store the uploaded files (you can change this)
-UPLOAD_FOLDER = 'uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Initialize database
+def init_db():
+    conn = sqlite3.connect('results.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            result TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# Ensure the folder exists
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Call the function to initialize the database
+init_db()
 
 @app.route('/')
 def index():
@@ -18,26 +26,30 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        return 'No file part in the request'
-    
-    file = request.files['file']
-    
-    if file.filename == '':
-        return 'No file selected'
-    
-    # Save the file to the upload folder
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    file.save(filepath)
-    
-    # Process the file (for now, just reading it with pandas)
-    df = pd.read_excel(filepath)  # Assuming Excel file
-    
-    # Example: Sum the first column (this is just a placeholder for actual logic)
-    result = df.iloc[:, 0].sum()
-    
-    return f'The sum of the first column is: {result}'
+    if request.method == 'POST':
+        # Get the uploaded file
+        file = request.files['file']
+
+        # Here, perform your file processing and calculations
+        result = "Result of your calculations"
+
+        # Save result to the database
+        conn = sqlite3.connect('results.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO results (result) VALUES (?)", (result,))
+        conn.commit()
+        conn.close()
+
+        return redirect(url_for('show_results'))
+
+@app.route('/results')
+def show_results():
+    conn = sqlite3.connect('results.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM results")
+    rows = cursor.fetchall()
+    conn.close()
+    return render_template('results.html', rows=rows)
 
 if __name__ == '__main__':
     app.run(debug=True)
-
